@@ -10,3 +10,5 @@ Helper script (Userscript) for faster moderation of JDownloader support forums
 2. Click here to install script: https://raw.githubusercontent.com/pspzockerscene/vBulletinJDownloaderForumHelper/refs/heads/main/vBulletinJDownloaderForumHelper.user.js
 3. Visit threads in JDownloader forums while logged in as moderator to use the script.
 
+Screenshot:
+![Screenshot](https://raw.githubusercontent.com/pspzockerscene/vBulletinJDownloaderForumHelper/refs/heads/main/images/2025_11_18_Addon_presentation.png)
