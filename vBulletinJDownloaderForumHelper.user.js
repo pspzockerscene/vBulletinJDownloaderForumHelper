@@ -282,14 +282,17 @@
     // Listener auf Select-Change
     document.getElementById('prefix-selector').addEventListener('change', updateButtonStatus);
 
-    // Hotkey 'c' zum Anwenden des Präfix
+    // Hotkey Ctrl+E zum Anwenden des Präfix
     document.addEventListener('keydown', function(event) {
-        // Prüfe ob 'c' oder 'C' gedrückt wurde
-        if ((event.key === 'c' || event.key === 'C') && !event.ctrlKey && !event.altKey && !event.shiftKey) {
-            // Nur wenn der Button aktiv ist (nicht disabled)
-            const button = document.getElementById('prefix-apply-btn');
-            if (button && !button.disabled) {
-                button.click();
+        // Prüfe ob Ctrl+E gedrückt wurde
+        if (event.key === 'e' || event.key === 'E') {
+            if (event.ctrlKey && !event.altKey && !event.shiftKey) {
+                event.preventDefault(); // Verhindere Default-Aktion
+                // Nur wenn der Button aktiv ist (nicht disabled)
+                const button = document.getElementById('prefix-apply-btn');
+                if (button && !button.disabled) {
+                    button.click();
+                }
             }
         }
     });
