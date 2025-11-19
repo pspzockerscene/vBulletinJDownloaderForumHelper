@@ -2,19 +2,22 @@
 // @name               JDownloader Forum Helper
 // @name:en            JDownloader Forum Helper
 // @name:de            JDownloader Forum Helper
-// @description        Setzt Thread-Präfixe mit einem Klick direkt aus der Thread-Ansicht
-// @description:en     Set thread prefixes with a single click from the thread view
-// @description:de     Setzt Thread-Präfixe mit einem Klick direkt aus der Thread-Ansicht
-// @version            1.3
+// @description        Setzt Thread-Präfixe mit einem Klick direkt aus der Thread-Ansicht und der Forumsübersicht
+// @description:en     Set thread prefixes with a single click from thread view and forum list
+// @description:de     Setzt Thread-Präfixe mit einem Klick direkt aus der Thread-Ansicht und der Forumsübersicht
+// @version            1.6
 // @author             pspzockerscene
 // @namespace          https://board.jdownloader.org/
 // @homepageURL        https://github.com/pspzockerscene/vBulletinJDownloaderForumHelper
 // @homepage           https://github.com/pspzockerscene/vBulletinJDownloaderForumHelper
 // @icon               https://board.jdownloader.org/favicon.ico
 // @match              https://board.jdownloader.org/showthread.php*
+// @match              https://board.jdownloader.org/forumdisplay.php*
 // @run-at             document-end
 // @inject-into        content
-// @grant              none
+// @grant              GM_getValue
+// @grant              GM_setValue
+// @grant              GM_registerMenuCommand
 // @license            GPL v3
 // @compatible         firefox
 // @compatible         chrome
@@ -28,63 +31,29 @@
 (function() {
     'use strict';
 
-    // Schritt 1: Prüfe ob User eingeloggt ist (logouthash ohne Anführungszeichen)
-    if (!document.body.innerHTML.includes('logouthash=')) {
-        // Nicht eingeloggt - beende Script still
-        return;
-    }
+    // ===== ZENTRALE KONFIGURATION =====
 
-    // Schritt 2: Thread-ID aus URL-Parameter "t" extrahieren
-    let threadId = new URLSearchParams(window.location.search).get('t');
-
-    // Schritt 3: Wenn keine threadID in URL, extrahiere aus href="printthread.php?t=..."
-    if (!threadId) {
-        const printMatch = document.body.innerHTML.match(/href="printthread\.php\?t=(\d+)"/);
-        if (printMatch) {
-            threadId = printMatch[1];
+    /**
+     * Gibt die Präfix-Liste basierend auf der Forum-ID zurück
+     */
+    function getPrefixesForForum(forumId) {
+        if (forumId === 52) {
+            // Eventscripter Forum
+            return {
+                '': '(ohne Präfix)',
+                'scripts_scripts': '[Script]',
+                'scripts_solved': '[Solved]',
+                'scripts_update': '[Wait for JD2 Core Update]',
+                'scripts_declined': '[Declined]',
+                'scripts_progress': '[In Progress]',
+                'scripts_user_required': '[User feedback required]',
+                'scripts_request': '[Script request]',
+                'scripts_dev_required': '[Developer Feedback required]'
+            };
         }
-    }
 
-    // Wenn immer noch keine threadID gefunden, beende Script still
-    if (!threadId) {
-        return;
-    }
-
-    // Schritt 4: Ermittle das aktuelle Unterforum aus der navbar nur
-    // Suche nach: <span class="navbar">...forumdisplay.php?f=XX...
-    const navbarMatch = document.body.innerHTML.match(/<span class="navbar">[^<]*<a href="forumdisplay\.php\?f=(\d+)">/g);
-    let currentForumId = null;
-
-    if (navbarMatch && navbarMatch.length > 0) {
-        // Nimm den letzten Navbar-Link (das ist das aktuelle Unterforum)
-        const lastNavbarLink = navbarMatch[navbarMatch.length - 1];
-        const forumMatch = lastNavbarLink.match(/f=(\d+)/);
-        if (forumMatch) {
-            currentForumId = parseInt(forumMatch[1]);
-        }
-    }
-
-    // Definiere Präfixe je nach Unterforum
-    let prefixes = {};
-    let defaultPrefix = 'bugreport_s'; // Standard default
-
-    if (currentForumId === 52) {
-        // Eventscripter Forum (id 52)
-        prefixes = {
-            '': '(ohne Präfix)',
-            'scripts_scripts': '[Script]',
-            'scripts_solved': '[Solved]',
-            'scripts_update': '[Wait for JD2 Core Update]',
-            'scripts_declined': '[Declined]',
-            'scripts_progress': '[In Progress]',
-            'scripts_user_required': '[User feedback required]',
-            'scripts_request': '[Script request]',
-            'scripts_dev_required': '[Developer Feedback required]'
-        };
-        defaultPrefix = 'scripts_solved'; // Default für Forum 52
-    } else {
         // Standard Bug Report Präfixe
-        prefixes = {
+        return {
             '': '(ohne Präfix)',
             'bugreport_s': '[Erledigt]',
             'bugreport_major': '[Erledigt in JD2]',
@@ -99,9 +68,128 @@
         };
     }
 
-    // CSS für das Overlay
-    const style = document.createElement('style');
-    style.textContent = `
+    /**
+     * Gibt den Default-Präfix basierend auf Forum-ID zurück
+     */
+    function getDefaultPrefixForForum(forumId) {
+        return forumId === 52 ? 'scripts_solved' : 'bugreport_s';
+    }
+
+    /**
+     * Extrahiert die Forum-ID aus URL (forumdisplay.php) oder Navbar (showthread.php)
+     */
+    function getForumId() {
+        // Methode 1: Aus URL (für forumdisplay.php)
+        const urlParams = new URLSearchParams(window.location.search);
+        if (window.location.href.includes('forumdisplay.php')) {
+            const forumId = parseInt(urlParams.get('f'));
+            if (forumId) return forumId;
+        }
+
+        // Methode 2: Aus Navbar (für showthread.php)
+        const navbarMatch = document.body.innerHTML.match(/<span class="navbar">[^<]*<a href="forumdisplay\.php\?f=(\d+)">/g);
+        if (navbarMatch && navbarMatch.length > 0) {
+            const lastNavbarLink = navbarMatch[navbarMatch.length - 1];
+            const forumMatch = lastNavbarLink.match(/f=(\d+)/);
+            if (forumMatch) {
+                return parseInt(forumMatch[1]);
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Ladet Thread-Daten von der Bearbeitungsseite
+     */
+    function loadThreadEditData(threadId) {
+        return fetch(`https://board.jdownloader.org/postings.php?do=editthread&t=${threadId}`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                return response.text();
+            })
+            .then(html => {
+                const tokenMatch = html.match(/name="securitytoken"\s+value="([^"]+)"/);
+                const titleMatch = html.match(/name="title"\s+value="([^"]*)"/);
+                const notesMatch = html.match(/name="notes"\s+value="([^"]*)"/);
+
+                if (!tokenMatch || !titleMatch) {
+                    throw new Error('Konnte erforderliche Daten nicht extrahieren');
+                }
+
+                return {
+                    token: tokenMatch[1],
+                    title: titleMatch[1],
+                    notes: notesMatch ? notesMatch[1] : '',
+                    open: html.match(/name="open"\s+value="yes"\s+id="cb_open"\s+checked="checked"/) ? 'yes' : '',
+                    visible: html.match(/name="visible"\s+value="yes"\s+id="cb_visible"\s+checked="checked"/) ? 'yes' : '',
+                    iconid: html.match(/name="iconid"\s+value="(\d+)"\s+id="rb_iconid_\d+"\s+checked="checked"/) ? RegExp.$1 : '0'
+                };
+            });
+    }
+
+    /**
+     * Speichert das neue Thread-Präfix
+     */
+    function saveThreadPrefix(threadId, prefixId, editData) {
+        const formData = new URLSearchParams();
+        formData.append('s', '');
+        formData.append('securitytoken', editData.token);
+        formData.append('t', threadId);
+        formData.append('do', 'updatethread');
+        formData.append('prefixid', prefixId);
+        formData.append('title', editData.title);
+        formData.append('notes', editData.notes);
+        if (editData.open) formData.append('open', editData.open);
+        if (editData.visible) formData.append('visible', editData.visible);
+        formData.append('iconid', editData.iconid);
+
+        return fetch(`https://board.jdownloader.org/postings.php?do=updatethread&t=${threadId}`, {
+            method: 'POST',
+            body: formData,
+            credentials: 'include',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded'
+            }
+        }).then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            return response;
+        });
+    }
+
+    // ===== SINGLE THREAD OVERLAY =====
+    (function singleThreadOverlay() {
+        if (!GM_getValue('enableSingleThreadOverlay', true)) {
+            return;
+        }
+
+        if (!document.body.innerHTML.includes('logouthash=')) {
+            return;
+        }
+
+        let threadId = new URLSearchParams(window.location.search).get('t');
+        if (!threadId) {
+            const printMatch = document.body.innerHTML.match(/href="printthread\.php\?t=(\d+)"/);
+            if (printMatch) {
+                threadId = printMatch[1];
+            }
+        }
+
+        if (!threadId) {
+            return;
+        }
+
+        const currentForumId = getForumId();
+        const prefixes = getPrefixesForForum(currentForumId);
+        const defaultPrefix = getDefaultPrefixForForum(currentForumId);
+
+        // CSS für das Overlay
+        const style = document.createElement('style');
+        style.textContent = `
         #prefix-setter-overlay {
             position: fixed;
             top: 20px;
@@ -157,6 +245,10 @@
             border: 1px solid #999999;
         }
 
+        #prefix-apply-btn[title] {
+            cursor: help;
+        }
+
         #prefix-status {
             margin-top: 10px;
             padding: 8px;
@@ -203,6 +295,9 @@
         </select>
         <button id="prefix-apply-btn">Präfix übernehmen</button>
         <div id="prefix-status"></div>
+        <div style="margin-top: 8px; font-size: 10px; color: #666; text-align: center;">
+            Hotkey: <kbd style="background: #f0f0f0; padding: 2px 4px; border-radius: 2px; font-family: monospace;">Ctrl+E</kbd>
+        </div>
     `;
     document.body.appendChild(overlay);
 
@@ -279,6 +374,10 @@
     // Initial Button Status setzen
     updateButtonStatus();
 
+    // Tooltip zum Button hinzufügen
+    const button = document.getElementById('prefix-apply-btn');
+    button.title = 'Klick oder Ctrl+E drücken';
+
     // Listener auf Select-Change
     document.getElementById('prefix-selector').addEventListener('change', updateButtonStatus);
 
@@ -309,102 +408,185 @@
         }
     });
 
-    // Button-Click-Handler
-    document.getElementById('prefix-apply-btn').addEventListener('click', function() {
-        const selectedPrefix = document.getElementById('prefix-selector').value;
-        const button = this;
-        const statusDiv = document.getElementById('prefix-status');
+        // Button-Click-Handler mit zentralen Funktionen
+        document.getElementById('prefix-apply-btn').addEventListener('click', function() {
+            const selectedPrefix = document.getElementById('prefix-selector').value;
+            const button = this;
+            const statusDiv = document.getElementById('prefix-status');
 
-        button.disabled = true;
-        statusDiv.className = 'loading';
-        statusDiv.textContent = 'Bearbeitungsseite wird geladen...';
+            button.disabled = true;
+            statusDiv.className = 'loading';
+            statusDiv.textContent = 'Bearbeitungsseite wird geladen...';
 
-        // Schritt 1: Zur Bearbeitungsseite navigieren um alle erforderlichen Werte zu extrahieren
-        fetch(`https://board.jdownloader.org/postings.php?do=editthread&t=${threadId}`)
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error(`Bearbeitungsseite konnte nicht geladen werden (Status: ${response.status})`);
-                }
-                return response.text();
-            })
-            .then(html => {
-                // Alle erforderlichen Werte aus der Bearbeitungsseite extrahieren
-                const tokenMatch = html.match(/name="securitytoken"\s+value="([^"]+)"/);
-                const titleMatch = html.match(/name="title"\s+value="([^"]*)"/);
-                const notesMatch = html.match(/name="notes"\s+value="([^"]*)"/);
+            loadThreadEditData(threadId)
+                .then(editData => {
+                    statusDiv.textContent = 'Präfix wird gespeichert...';
+                    return saveThreadPrefix(threadId, selectedPrefix, editData);
+                })
+                .then(() => {
+                    button.disabled = false;
+                    statusDiv.className = 'success';
+                    statusDiv.textContent = '✓ Präfix erfolgreich gespeichert!';
 
-                // Validierung: sicherstellen dass wir die richtigen Werte gefunden haben
-                if (!tokenMatch) {
-                    throw new Error('Security Token konnte nicht gefunden werden. Möglicherweise keine Berechtigung.');
-                }
-                if (!titleMatch) {
-                    throw new Error('Thread-Titel konnte nicht gefunden werden.');
-                }
-
-                // Checkbox-Status korrekt erkennen - suche nach name="open" mit checked
-                const openMatch = html.match(/name="open"\s+value="yes"\s+id="cb_open"\s+checked="checked"/);
-                const visibleMatch = html.match(/name="visible"\s+value="yes"\s+id="cb_visible"\s+checked="checked"/);
-
-                // Icon-ID: suche nach name="iconid" mit value="X" und checked
-                const iconidMatch = html.match(/name="iconid"\s+value="(\d+)"\s+id="rb_iconid_\d+"\s+checked="checked"/);
-
-                const newSecurityToken = tokenMatch[1];
-                const title = titleMatch[1];
-                const notes = notesMatch ? notesMatch[1] : '';
-                const open = openMatch ? 'yes' : '';
-                const visible = visibleMatch ? 'yes' : '';
-                const iconid = iconidMatch ? iconidMatch[1] : '0';
-
-                statusDiv.textContent = 'Präfix wird gespeichert...';
-
-                // Schritt 2: Formular mit allen erforderlichen Daten absenden
-                const formData = new URLSearchParams();
-                formData.append('s', '');
-                formData.append('securitytoken', newSecurityToken);
-                formData.append('t', threadId);
-                formData.append('do', 'updatethread');
-                formData.append('prefixid', selectedPrefix);
-                formData.append('title', title);
-                formData.append('notes', notes);
-                // Nur append wenn wirklich gecheckt
-                if (open) formData.append('open', open);
-                if (visible) formData.append('visible', visible);
-                formData.append('iconid', iconid);
-
-                return fetch(`https://board.jdownloader.org/postings.php?do=updatethread&t=${threadId}`, {
-                    method: 'POST',
-                    body: formData,
-                    credentials: 'include',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded'
-                    }
-                });
-            })
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error(`Fehler beim Speichern (HTTP ${response.status})`);
-                }
-                return response.text();
-            })
-            .then(html => {
-                // Prüfe ob das Präfix tatsächlich gespeichert wurde (optional)
-                // oder gehe einfach davon aus dass es funktioniert hat
-                button.disabled = false;
-                statusDiv.className = 'success';
-                statusDiv.textContent = '✓ Präfix erfolgreich gespeichert!';
-
-                // Nach 2 Sekunden neu laden
-                setTimeout(() => {
                     location.reload();
-                }, 2000);
-            })
-            .catch(error => {
-                button.disabled = false;
-                statusDiv.className = 'error';
-                statusDiv.textContent = `✗ Fehler: ${error.message}`;
-                console.error('Fehler beim Präfix setzen:', error);
-            });
+                })
+                .catch(error => {
+                    button.disabled = false;
+                    statusDiv.className = 'error';
+                    statusDiv.textContent = `✗ Fehler: ${error.message}`;
+                    console.error('Fehler beim Präfix setzen:', error);
+                });
+        });
+
+        console.log('JDownloader Prefix Setter geladen. Thread-ID:', threadId);
+    })();
+
+    // ===== FORUM LIST PREFIXES =====
+    (function forumListPrefixes() {
+        if (!GM_getValue('enableForumListPrefixes', true)) {
+            return;
+        }
+
+        if (!window.location.href.includes('forumdisplay.php')) {
+            return;
+        }
+
+        if (!document.body.innerHTML.includes('logouthash=')) {
+            return;
+        }
+
+        const currentForumId = getForumId();
+        if (!currentForumId) {
+            return;
+        }
+
+        const prefixes = getPrefixesForForum(currentForumId);
+
+    // CSS für das Dropdown
+    const style = document.createElement('style');
+    style.textContent = `
+        .thread-prefix-selector {
+            font-size: 9px;
+            padding: 2px 4px;
+            margin-left: 8px;
+            border: 1px solid #BEC9D1;
+            border-radius: 2px;
+            font-family: verdana, geneva, lucida, arial, helvetica, sans-serif;
+            background: white;
+            cursor: pointer;
+            width: 110px;
+        }
+
+        .thread-prefix-selector:disabled {
+            background: #f0f0f0;
+            cursor: not-allowed;
+            color: #999;
+        }
+
+        .thread-prefix-selector:hover:not(:disabled) {
+            border-color: #0B198C;
+            background: #f9f9f9;
+        }
+    `;
+    document.head.appendChild(style);
+
+    // Finde alle Thread-Rows
+    const threadRows = document.querySelectorAll('td[id^="td_threadtitle_"]');
+
+    console.log('Gefundene Thread-Rows:', threadRows.length);
+
+    threadRows.forEach(titleCell => {
+        // Extrahiere Thread-ID aus der Cell-ID
+        const idMatch = titleCell.id.match(/td_threadtitle_(\d+)/);
+        if (!idMatch) {
+            return;
+        }
+        const threadId = idMatch[1];
+
+        // Finde die aktuelle Row
+        const row = titleCell.closest('tr');
+        if (!row) {
+            return;
+        }
+
+        // Extrahiere aktuelles Präfix
+        let currentPrefix = '';
+        const rowHTML = row.innerHTML;
+        let prefixMatch = rowHTML.match(/\[<b><font[^>]*>([^\]<]+)<\/font><\/b>\]/);
+        if (!prefixMatch) {
+            prefixMatch = rowHTML.match(/\[<b>([^\]<]+)<\/b>\]/);
+        }
+
+        if (prefixMatch && prefixMatch[1]) {
+            const prefixText = prefixMatch[1].trim();
+            const prefixLabel = `[${prefixText}]`;
+            for (const [id, label] of Object.entries(prefixes)) {
+                if (label === prefixLabel) {
+                    currentPrefix = id;
+                    break;
+                }
+            }
+        }
+
+        // Finde den Thread-Link
+        const threadLink = titleCell.querySelector('a[id^="thread_title_"]');
+        if (!threadLink) {
+            return;
+        }
+
+        // Erstelle Dropdown
+        const dropdown = document.createElement('select');
+        dropdown.className = 'thread-prefix-selector';
+        dropdown.title = 'Thread-Präfix ändern';
+        dropdown.innerHTML = Object.entries(prefixes)
+            .map(([id, label]) => `<option value="${id}" ${id === currentPrefix ? 'selected' : ''}>${label}</option>`)
+            .join('');
+
+        // Füge Dropdown direkt nach dem Thread-Link ein (inline)
+        threadLink.parentNode.insertBefore(dropdown, threadLink.nextSibling);
+
+        // Change-Event Handler mit zentraler Funktion
+        dropdown.addEventListener('change', function() {
+            const selectedPrefix = this.value;
+            if (selectedPrefix === currentPrefix) {
+                return;
+            }
+
+            this.disabled = true;
+
+            loadThreadEditData(threadId)
+                .then(editData => {
+                    return saveThreadPrefix(threadId, selectedPrefix, editData);
+                })
+                .then(() => {
+                    setTimeout(() => {
+                        location.reload();
+                    }, 500);
+                })
+                .catch(error => {
+                    console.error('Fehler beim Ändern des Präfix (Thread ' + threadId + '):', error);
+                    dropdown.disabled = false;
+                    alert('Fehler beim Ändern des Präfix: ' + error.message);
+                });
+        });
+
+        console.log('Dropdown hinzugefügt für Thread:', threadId);
     });
 
-    console.log('JDownloader Prefix Setter geladen. Thread-ID:', threadId);
+    console.log('JDownloader Forum List Helper geladen');
+    })();
+
+    // ===== MENÜ-BEFEHLE =====
+    GM_registerMenuCommand('🔧 JDF: Single-Thread Overlay ' + (GM_getValue('enableSingleThreadOverlay', true) ? '✓' : '✗'), function() {
+        const current = GM_getValue('enableSingleThreadOverlay', true);
+        GM_setValue('enableSingleThreadOverlay', !current);
+        alert('Single-Thread Overlay ' + (!current ? 'aktiviert' : 'deaktiviert') + '\n(Seite neu laden zum Anwenden)');
+    });
+
+    GM_registerMenuCommand('🔧 JDF: Threadübersicht Präfixe ' + (GM_getValue('enableForumListPrefixes', true) ? '✓' : '✗'), function() {
+        const current = GM_getValue('enableForumListPrefixes', true);
+        GM_setValue('enableForumListPrefixes', !current);
+        alert('Threadübersicht Präfixe ' + (!current ? 'aktiviert' : 'deaktiviert') + '\n(Seite neu laden zum Anwenden)');
+    });
+
 })();
