@@ -31,7 +31,10 @@
 (function() {
     'use strict';
 
-    // ===== ZENTRALE KONFIGURATION =====
+    // Zentrale Prüfung: User muss eingeloggt sein
+    if (!document.body.innerHTML.includes('logouthash=')) {
+        return;
+    }
 
     /**
      * Gibt die Präfix-Liste basierend auf der Forum-ID zurück
@@ -164,10 +167,6 @@
     // ===== SINGLE THREAD OVERLAY =====
     (function singleThreadOverlay() {
         if (!GM_getValue('enableSingleThreadOverlay', true)) {
-            return;
-        }
-
-        if (!document.body.innerHTML.includes('logouthash=')) {
             return;
         }
 
@@ -383,16 +382,15 @@
 
     // Hotkey Ctrl+E zum Anwenden des Präfix
     document.addEventListener('keydown', function(event) {
-        // Prüfe ob Ctrl+E gedrückt wurde
-        if (event.key === 'e' || event.key === 'E') {
-            if (event.ctrlKey && !event.altKey && !event.shiftKey) {
-                event.preventDefault(); // Verhindere Default-Aktion
-                // Nur wenn der Button aktiv ist (nicht disabled)
-                const button = document.getElementById('prefix-apply-btn');
-                if (button && !button.disabled) {
-                    button.click();
-                }
-            }
+        // Early return falls nicht Ctrl+E
+        if ((event.key !== 'e' && event.key !== 'E') || !event.ctrlKey || event.altKey || event.shiftKey) {
+            return;
+        }
+
+        event.preventDefault();
+        const button = document.getElementById('prefix-apply-btn');
+        if (button && !button.disabled) {
+            button.click();
         }
     });
 
@@ -448,10 +446,6 @@
         }
 
         if (!window.location.href.includes('forumdisplay.php')) {
-            return;
-        }
-
-        if (!document.body.innerHTML.includes('logouthash=')) {
             return;
         }
 
@@ -559,9 +553,7 @@
                     return saveThreadPrefix(threadId, selectedPrefix, editData);
                 })
                 .then(() => {
-                    setTimeout(() => {
-                        location.reload();
-                    }, 500);
+                    location.reload();
                 })
                 .catch(error => {
                     console.error('Fehler beim Ändern des Präfix (Thread ' + threadId + '):', error);
