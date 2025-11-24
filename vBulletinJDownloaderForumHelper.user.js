@@ -134,16 +134,28 @@
     }
 
     /**
+     * Dekodiert HTML-Entities (z.B. &quot; zu ")
+     */
+    function decodeHtmlEntities(text) {
+        const textarea = document.createElement('textarea');
+        textarea.innerHTML = text;
+        return textarea.value;
+    }
+
+    /**
      * Speichert das neue Thread-Präfix
      */
     function saveThreadPrefix(threadId, prefixId, editData) {
+        // Dekodiere den Titel um HTML-Entities richtig zu behandeln
+        const decodedTitle = decodeHtmlEntities(editData.title);
+
         const formData = new URLSearchParams();
         formData.append('s', '');
         formData.append('securitytoken', editData.token);
         formData.append('t', threadId);
         formData.append('do', 'updatethread');
         formData.append('prefixid', prefixId);
-        formData.append('title', editData.title);
+        formData.append('title', decodedTitle);
         formData.append('notes', editData.notes);
         if (editData.open) formData.append('open', editData.open);
         if (editData.visible) formData.append('visible', editData.visible);
@@ -322,8 +334,9 @@
                 }
             }
 
-            // Wenn Präfix gefunden aber nicht erkannt - Fehler
-            return `UNKNOWN:${prefixLabel}`;
+            // Wenn Präfix gefunden aber nicht erkannt (z.B. wegen Titeln mit [xyz])
+            // -> behandle als leeren Präfix (unbekannt = nicht gesetzt)
+            return '';
         }
 
         // Wenn kein Präfix mit Brackets gefunden, ist das Präfix leer
@@ -332,23 +345,6 @@
 
     // Prüfe initial welches Präfix gesetzt ist
     const currentPrefix = getCurrentPrefix();
-
-    // Wenn ein unbekanntes Präfix erkannt wurde, zeige Fehler
-    if (currentPrefix.startsWith('UNKNOWN:')) {
-        const unknownPrefix = currentPrefix.substring(8); // Entferne "UNKNOWN:" Präfix
-        overlay.innerHTML = `
-            <div style="color: red; font-weight: bold; margin-bottom: 10px;">
-                ⚠️ Fehler
-            </div>
-            <div style="font-size: 10px; color: red;">
-                Unbekanntes Präfix erkannt:<br/>
-                <strong>${unknownPrefix}</strong><br/>
-                <br/>
-                Das Script kennt diesen Präfix nicht. Bitte manuell bearbeiten oder den Script-Autor kontaktieren.
-            </div>
-        `;
-        return;
-    }
 
     // Update Button Status
     function updateButtonStatus() {
