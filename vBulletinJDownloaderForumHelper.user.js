@@ -143,7 +143,7 @@
     }
 
     /**
-     * Speichert das neue Thread-Präfix mit FormData
+     * Speichert das neue Thread-Präfix mit FormData und ISO-8859-1 Encoding
      */
     function saveThreadPrefix(threadId, prefixId, editData) {
         // Dekodiere den Titel um HTML-Entities richtig zu behandeln
@@ -164,7 +164,10 @@
         return fetch(`https://board.jdownloader.org/postings.php?do=updatethread&t=${threadId}`, {
             method: 'POST',
             body: formData,
-            credentials: 'include'
+            credentials: 'include',
+            headers: {
+                'Content-Type': 'text/html; charset=ISO-8859-1'
+            }
         }).then(response => {
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}`);
