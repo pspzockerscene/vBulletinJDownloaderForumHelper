@@ -143,13 +143,13 @@
     }
 
     /**
-     * Speichert das neue Thread-Präfix
+     * Speichert das neue Thread-Präfix mit FormData
      */
     function saveThreadPrefix(threadId, prefixId, editData) {
         // Dekodiere den Titel um HTML-Entities richtig zu behandeln
         const decodedTitle = decodeHtmlEntities(editData.title);
 
-        const formData = new URLSearchParams();
+        const formData = new FormData();
         formData.append('s', '');
         formData.append('securitytoken', editData.token);
         formData.append('t', threadId);
@@ -164,10 +164,7 @@
         return fetch(`https://board.jdownloader.org/postings.php?do=updatethread&t=${threadId}`, {
             method: 'POST',
             body: formData,
-            credentials: 'include',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded'
-            }
+            credentials: 'include'
         }).then(response => {
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}`);
