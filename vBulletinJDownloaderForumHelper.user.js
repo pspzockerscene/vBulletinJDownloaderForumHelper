@@ -5,7 +5,7 @@
 // @description        Setzt Thread-Präfixe mit einem Klick direkt aus der Thread-Ansicht und der Forumsübersicht
 // @description:en     Set thread prefixes with a single click from thread view and forum list
 // @description:de     Setzt Thread-Präfixe mit einem Klick direkt aus der Thread-Ansicht und der Forumsübersicht
-// @version            1.6
+// @version            1.7
 // @author             pspzockerscene
 // @namespace          https://board.jdownloader.org/
 // @homepageURL        https://github.com/pspzockerscene/vBulletinJDownloaderForumHelper
@@ -111,7 +111,22 @@
                 if (!response.ok) {
                     throw new Error(`HTTP ${response.status}`);
                 }
-                return response.text();
+
+                // Extrahiere Charset aus Content-Type Header
+                let charset = 'utf-8'; // default
+                const contentType = response.headers.get('content-type');
+                if (contentType) {
+                    const charsetMatch = contentType.match(/charset=([^\s;]+)/i);
+                    if (charsetMatch) {
+                        charset = charsetMatch[1].toLowerCase().replace(/['"]/g, '');
+                    }
+                }
+
+                // Dekodiere mit erkanntem Charset
+                return response.arrayBuffer().then(buffer => {
+                    const decoder = new TextDecoder(charset);
+                    return decoder.decode(buffer);
+                });
             })
             .then(html => {
                 const tokenMatch = html.match(/name="securitytoken"\s+value="([^"]+)"/);
@@ -134,6 +149,32 @@
     }
 
     /**
+     * Konvertiert einen String zu ISO-8859-1 URL-encoded Format
+     */
+    function encodeISO88591(str) {
+        let encoded = '';
+        for (let i = 0; i < str.length; i++) {
+            const charCode = str.charCodeAt(i);
+            if (charCode <= 0xFF) {
+                // Zeichen ist im ISO-8859-1 Bereich
+                if ((charCode >= 48 && charCode <= 57) ||   // 0-9
+                    (charCode >= 65 && charCode <= 90) ||   // A-Z
+                    (charCode >= 97 && charCode <= 122) ||  // a-z
+                    charCode === 45 || charCode === 95 ||   // - _
+                    charCode === 46 || charCode === 126) {  // . ~
+                    encoded += str[i];
+                } else {
+                    encoded += '%' + charCode.toString(16).toUpperCase().padStart(2, '0');
+                }
+            } else {
+                // Zeichen außerhalb ISO-8859-1
+                encoded += '%' + charCode.toString(16).toUpperCase().padStart(2, '0');
+            }
+        }
+        return encoded;
+    }
+
+    /**
      * Dekodiert HTML-Entities (z.B. &quot; zu ")
      */
     function decodeHtmlEntities(text) {
@@ -149,22 +190,30 @@
         // Dekodiere den Titel um HTML-Entities richtig zu behandeln
         const decodedTitle = decodeHtmlEntities(editData.title);
 
-        const formData = new FormData();
-        formData.append('s', '');
-        formData.append('securitytoken', editData.token);
-        formData.append('t', threadId);
-        formData.append('do', 'updatethread');
-        formData.append('prefixid', prefixId);
-        formData.append('title', decodedTitle);
-        formData.append('notes', editData.notes);
-        if (editData.open) formData.append('open', editData.open);
-        if (editData.visible) formData.append('visible', editData.visible);
-        formData.append('iconid', editData.iconid);
+        // Baue den Body manuell mit vollständiger Encoding-Kontrolle
+        const bodyParts = [
+            's=',
+            'securitytoken=' + editData.token,
+            't=' + threadId,
+            'do=updatethread',
+            'prefixid=' + prefixId,
+            'title=' + encodeISO88591(decodedTitle),
+            'notes=' + encodeISO88591(editData.notes),
+            'iconid=' + editData.iconid
+        ];
+
+        if (editData.open) bodyParts.push('open=' + editData.open);
+        if (editData.visible) bodyParts.push('visible=' + editData.visible);
+
+        const body = bodyParts.join('&');
 
         return fetch(`https://board.jdownloader.org/postings.php?do=updatethread&t=${threadId}`, {
             method: 'POST',
-            body: formData,
-            credentials: 'include'
+            body: body,
+            credentials: 'include',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded'
+            }
         }).then(response => {
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}`);
@@ -206,65 +255,83 @@
             background: white;
             border: 2px solid #0B198C;
             border-radius: 5px;
-            padding: 15px;
+            padding: 10px;
             box-shadow: 0 4px 8px rgba(0,0,0,0.2);
             font-family: verdana, geneva, lucida, arial, helvetica, sans-serif;
             font-size: 11px;
+            width: auto;
+            max-width: 60px;
+            transition: max-width 0.3s ease;
+        }
+
+        #prefix-setter-overlay.expanded {
+            max-width: 200px;
         }
 
         #prefix-setter-overlay label {
             display: block;
-            margin-bottom: 8px;
+            margin-bottom: 5px;
             font-weight: bold;
             color: #333;
+            font-size: 10px;
         }
 
         #prefix-selector {
-            width: 200px;
-            padding: 5px;
-            margin-bottom: 10px;
+            width: 100%;
+            padding: 4px;
+            margin-bottom: 5px;
             font-size: 11px;
             border: 1px solid #BEC9D1;
             font-family: verdana, geneva, lucida, arial, helvetica, sans-serif;
+            box-sizing: border-box;
         }
 
         #prefix-apply-btn {
             width: 100%;
-            padding: 6px;
+            padding: 4px;
             background: #436976;
             color: white;
             border: 1px solid #2d3f4a;
             border-radius: 3px;
             cursor: pointer;
             font-weight: bold;
-            font-size: 11px;
+            font-size: 10px;
             font-family: verdana, geneva, lucida, arial, helvetica, sans-serif;
             transition: background 0.2s;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
 
-        #prefix-apply-btn:hover:not(:disabled) {
+        #copy-threadid-btn {
+            width: 100%;
+            padding: 4px;
+            margin-top: 3px;
+            background: #436976;
+            color: white;
+            border: 1px solid #2d3f4a;
+            border-radius: 3px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 10px;
+            font-family: verdana, geneva, lucida, arial, helvetica, sans-serif;
+            transition: background 0.2s;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        #copy-threadid-btn:hover {
             background: #2d3f4a;
         }
 
-        #prefix-apply-btn:disabled {
-            background: #cccccc;
-            color: #666666;
-            cursor: not-allowed;
-            border: 1px solid #999999;
-        }
-
-        #prefix-apply-btn[title] {
-            cursor: help;
-        }
-
         #prefix-status {
-            margin-top: 10px;
-            padding: 8px;
+            margin-top: 5px;
+            padding: 6px;
             border-radius: 3px;
             text-align: center;
             display: none;
-            font-size: 11px;
-            max-width: 200px;
+            font-size: 10px;
             word-wrap: break-word;
         }
 
@@ -291,26 +358,8 @@
     `;
     document.head.appendChild(style);
 
-    // Overlay HTML erstellen
-    const overlay = document.createElement('div');
-    overlay.id = 'prefix-setter-overlay';
-    overlay.innerHTML = `
-        <label for="prefix-selector">Thread-Präfix:</label>
-        <select id="prefix-selector">
-            ${Object.entries(prefixes).map(([value, label]) =>
-                `<option value="${value}" ${value === defaultPrefix ? 'selected' : ''}>${label}</option>`
-            ).join('')}
-        </select>
-        <button id="prefix-apply-btn">Präfix übernehmen</button>
-        <div id="prefix-status"></div>
-        <div style="margin-top: 8px; font-size: 10px; color: #666; text-align: center;">
-            Hotkey: <kbd style="background: #f0f0f0; padding: 2px 4px; border-radius: 2px; font-family: monospace;">Ctrl+E</kbd>
-        </div>
-    `;
-    document.body.appendChild(overlay);
-
-    // Extrahiere das aktuell gesetzte Präfix aus der Threadseite
-    function getCurrentPrefix() {
+    // Extrahiere das aktuell gesetzte Präfix und den Titel aus der Threadseite
+    function getCurrentPrefixAndTitle() {
         // Suche nach dem Thread-Titel in der navbar mit Präfix-Format
         // Beispiel: <td class="navbar"...><strong>[<b><font...>Erledigt</font></b>] Titel</strong></td>
         // oder auch einfach: <strong>[Erledigt] Titel</strong>
@@ -323,85 +372,144 @@
             // navbarMatch[1] enthält den Präfix-Text (z.B. "Erledigt")
             const prefixText = navbarMatch[1].trim();
             const prefixLabel = `[${prefixText}]`;
+            const title = navbarMatch[2] ? navbarMatch[2].trim() : '';
 
             // Finde die ID für dieses Label in den aktuellen Präfixen
             for (const [prefixId, label] of Object.entries(prefixes)) {
                 if (label === prefixLabel) {
-                    return prefixId;
+                    return { prefixId, title };
                 }
             }
 
-            // Wenn Präfix gefunden aber nicht erkannt (z.B. wegen Titeln mit [xyz])
-            // -> behandle als leeren Präfix (unbekannt = nicht gesetzt)
-            return '';
+            // Wenn Präfix gefunden aber nicht erkannt
+            return { prefixId: '', title };
         }
 
-        // Wenn kein Präfix mit Brackets gefunden, ist das Präfix leer
-        return '';
+        // Wenn kein Präfix mit Brackets gefunden
+        return { prefixId: '', title: '' };
     }
 
-    // Prüfe initial welches Präfix gesetzt ist
-    const currentPrefix = getCurrentPrefix();
+    const currentPrefixData = getCurrentPrefixAndTitle();
+    const currentPrefixId = currentPrefixData.prefixId;
+    const currentTitle = currentPrefixData.title;
+
+    // Overlay HTML erstellen
+    const overlay = document.createElement('div');
+    overlay.id = 'prefix-setter-overlay';
+    overlay.innerHTML = `
+        <label for="prefix-selector">Präfix:</label>
+        <select id="prefix-selector">
+            ${Object.entries(prefixes).map(([value, label]) =>
+                `<option value="${value}" ${value === currentPrefixId ? 'selected' : ''}>${label}</option>`
+            ).join('')}
+        </select>
+        <label for="thread-title-input" style="margin-top: 5px;">Titel:</label>
+        <input type="text" id="thread-title-input" value="${currentTitle.replace(/"/g, '&quot;')}" style="width: 100%; padding: 3px; margin-bottom: 5px; font-size: 10px; border: 1px solid #BEC9D1; font-family: verdana, geneva, lucida, arial, helvetica, sans-serif; box-sizing: border-box;">
+        <button id="prefix-apply-btn">Änderungen übernehmen</button>
+        <div style="margin-top: 2px; font-size: 8px; color: #999; text-align: center;">
+            <kbd style="background: #f0f0f0; padding: 1px 2px; border-radius: 2px; font-family: monospace;">Ctrl+E</kbd>
+        </div>
+        <button id="copy-threadid-btn">Thread ID kopieren</button>
+        <div style="margin-top: 2px; font-size: 8px; color: #999; text-align: center;">
+            <kbd style="background: #f0f0f0; padding: 1px 2px; border-radius: 2px; font-family: monospace;">Ctrl+Shift+C</kbd>
+        </div>
+        <div id="prefix-status"></div>
+    `;
+    document.body.appendChild(overlay);
 
     // Update Button Status
     function updateButtonStatus() {
         const selectedPrefix = document.getElementById('prefix-selector').value;
+        const selectedTitle = document.getElementById('thread-title-input').value;
         const button = document.getElementById('prefix-apply-btn');
 
-        // Button ist disabled wenn:
-        // 1. Kein Präfix gesetzt (currentPrefix === '') UND "(ohne Präfix)" ausgewählt (selectedPrefix === '')
-        // 2. Ein Präfix gesetzt (currentPrefix !== '') UND dieser mit dem ausgewählten übereinstimmt
-        if ((currentPrefix === '' && selectedPrefix === '') ||
-            (currentPrefix !== '' && currentPrefix === selectedPrefix)) {
-            button.disabled = true;
-            button.textContent = 'Präfix bereits gesetzt';
-            button.style.cursor = 'not-allowed';
-        } else {
+        // Button ist aktiv wenn: anderes Präfix ODER anderer Titel
+        const prefixChanged = selectedPrefix !== currentPrefixId;
+        const titleChanged = selectedTitle !== currentTitle;
+
+        if (prefixChanged || titleChanged) {
             button.disabled = false;
-            button.textContent = 'Präfix übernehmen';
+            button.textContent = 'Änderungen übernehmen';
             button.style.cursor = 'pointer';
+        } else {
+            button.disabled = true;
+            button.textContent = 'Keine Änderungen';
+            button.style.cursor = 'not-allowed';
         }
     }
 
     // Initial Button Status setzen
     updateButtonStatus();
 
-    // Tooltip zum Button hinzufügen
+    // Tooltip zum Präfix Button hinzufügen
     const button = document.getElementById('prefix-apply-btn');
     button.title = 'Klick oder Ctrl+E drücken';
 
-    // Listener auf Select-Change
+    // Tooltip zum ThreadID Button hinzufügen
+    const copyButton = document.getElementById('copy-threadid-btn');
+    copyButton.title = 'Klick oder Ctrl+Shift+C drücken';
+
+    // Listener auf Select-Change und Input-Change
     document.getElementById('prefix-selector').addEventListener('change', updateButtonStatus);
+    document.getElementById('thread-title-input').addEventListener('input', updateButtonStatus);
 
-    // Hotkey Ctrl+E zum Anwenden des Präfix
-    document.addEventListener('keydown', function(event) {
-        // Early return falls nicht Ctrl+E
-        if ((event.key !== 'e' && event.key !== 'E') || !event.ctrlKey || event.altKey || event.shiftKey) {
-            return;
-        }
+    // Expand/Collapse Funktionalität
+    const overlayDiv = document.getElementById('prefix-setter-overlay');
 
-        event.preventDefault();
-        const button = document.getElementById('prefix-apply-btn');
-        if (button && !button.disabled) {
-            button.click();
+    // Expandiere bei Klick auf Dropdown
+    document.getElementById('prefix-selector').addEventListener('click', function() {
+        overlayDiv.classList.add('expanded');
+    });
+
+    // Expandiere bei Klick ins Titel-Input
+    document.getElementById('thread-title-input').addEventListener('click', function() {
+        overlayDiv.classList.add('expanded');
+    });
+
+    // Expandiere bei Klick ins leere der Box
+    overlayDiv.addEventListener('click', function(e) {
+        // Nur wenn auf die Box selbst geklickt, nicht auf Elemente darin
+        if (e.target === overlayDiv) {
+            overlayDiv.classList.add('expanded');
         }
     });
 
-    // Security Token aus der Seite extrahieren
-    let securityToken = '';
-    const scripts = document.querySelectorAll('script');
-    scripts.forEach(script => {
-        if (script.textContent.includes('SECURITYTOKEN')) {
-            const match = script.textContent.match(/SECURITYTOKEN\s*=\s*"([^"]+)"/);
-            if (match) {
-                securityToken = match[1];
+    // Kollabiere wenn außerhalb der Box geklickt
+    document.addEventListener('click', function(e) {
+        if (!overlayDiv.contains(e.target)) {
+            overlayDiv.classList.remove('expanded');
+        }
+    });
+
+    // Hotkey Ctrl+E zum Anwenden des Präfix
+    document.addEventListener('keydown', function(event) {
+        // Ctrl+E für Präfix setzen
+        if ((event.key === 'e' || event.key === 'E') && event.ctrlKey && !event.altKey && !event.shiftKey) {
+            event.preventDefault();
+            const button = document.getElementById('prefix-apply-btn');
+            if (button && !button.disabled) {
+                button.click();
+            }
+        }
+
+        // Ctrl+Shift+C für ThreadID kopieren
+        if ((event.key === 'c' || event.key === 'C') && event.ctrlKey && event.shiftKey && !event.altKey) {
+            event.preventDefault();
+            const button = document.getElementById('copy-threadid-btn');
+            if (button) {
+                button.click();
             }
         }
     });
 
+    // Security Token aus der Seite extrahieren
+    const tokenMatch = document.body.innerHTML.match(/var SECURITYTOKEN = "([0-9]+-[a-f0-9]{40})"/);
+    const securityToken = tokenMatch ? tokenMatch[1] : '';
+
         // Button-Click-Handler mit zentralen Funktionen
         document.getElementById('prefix-apply-btn').addEventListener('click', function() {
             const selectedPrefix = document.getElementById('prefix-selector').value;
+            const selectedTitle = document.getElementById('thread-title-input').value;
             const button = this;
             const statusDiv = document.getElementById('prefix-status');
 
@@ -411,13 +519,15 @@
 
             loadThreadEditData(threadId)
                 .then(editData => {
-                    statusDiv.textContent = 'Präfix wird gespeichert...';
+                    statusDiv.textContent = 'Änderungen werden gespeichert...';
+                    // Überschreibe den Titel mit dem editierten Wert
+                    editData.title = selectedTitle;
                     return saveThreadPrefix(threadId, selectedPrefix, editData);
                 })
                 .then(() => {
                     button.disabled = false;
                     statusDiv.className = 'success';
-                    statusDiv.textContent = '✓ Präfix erfolgreich gespeichert!';
+                    statusDiv.textContent = '✓ Änderungen erfolgreich gespeichert!';
 
                     location.reload();
                 })
@@ -425,8 +535,26 @@
                     button.disabled = false;
                     statusDiv.className = 'error';
                     statusDiv.textContent = `✗ Fehler: ${error.message}`;
-                    console.error('Fehler beim Präfix setzen:', error);
+                    console.error('Fehler beim Speichern:', error);
                 });
+        });
+
+        // Click-Handler für ThreadID kopieren
+        document.getElementById('copy-threadid-btn').addEventListener('click', function() {
+            navigator.clipboard.writeText(threadId).then(() => {
+                const statusDiv = document.getElementById('prefix-status');
+                statusDiv.className = 'success';
+                statusDiv.textContent = `✓ Thread ID ${threadId} kopiert!`;
+                setTimeout(() => {
+                    statusDiv.className = '';
+                    statusDiv.textContent = '';
+                }, 2000);
+            }).catch(error => {
+                const statusDiv = document.getElementById('prefix-status');
+                statusDiv.className = 'error';
+                statusDiv.textContent = '✗ Fehler beim Kopieren';
+                console.error('Fehler beim Kopieren:', error);
+            });
         });
 
         console.log('JDownloader Prefix Setter geladen. Thread-ID:', threadId);
