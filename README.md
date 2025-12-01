@@ -3,7 +3,9 @@ Helper script (Userscript) for faster moderation of JDownloader support forums
 
 ## Features
 * Quickly alter thread prefixes: 1 click or hotkey vs 6 clicks
-* Quickly apply selected prefix with hotkey **CTRL + E**
+* Quickly alter thread title
+* Quickly apply changes with hotkey **CTRL + E**
+* Quickly copy thread id with button or hotkey **CTRL + SHIFT + C**
 
 ## Installation
 1. Get Tampermonkey: 
