@@ -5,7 +5,7 @@
 // @description        Setzt Thread-Präfixe mit einem Klick direkt aus der Thread-Ansicht und der Forumsübersicht
 // @description:en     Set thread prefixes with a single click from thread view and forum list
 // @description:de     Setzt Thread-Präfixe mit einem Klick direkt aus der Thread-Ansicht und der Forumsübersicht
-// @version            1.7
+// @version            1.8
 // @author             pspzockerscene
 // @namespace          https://board.jdownloader.org/
 // @homepageURL        https://github.com/pspzockerscene/vBulletinJDownloaderForumHelper
@@ -400,7 +400,7 @@
         <label for="prefix-selector">Präfix:</label>
         <select id="prefix-selector">
             ${Object.entries(prefixes).map(([value, label]) =>
-                `<option value="${value}" ${value === currentPrefixId ? 'selected' : ''}>${label}</option>`
+                `<option value="${value}" ${value === 'bugreport_s' ? 'selected' : ''}>${label}</option>`
             ).join('')}
         </select>
         <label for="thread-title-input" style="margin-top: 5px;">Titel:</label>
