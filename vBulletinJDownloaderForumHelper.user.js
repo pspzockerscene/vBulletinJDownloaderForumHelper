@@ -5,7 +5,7 @@
 // @description        Setzt Thread-Präfixe mit einem Klick direkt aus der Thread-Ansicht und der Forumsübersicht
 // @description:en     Set thread prefixes with a single click from thread view and forum list
 // @description:de     Setzt Thread-Präfixe mit einem Klick direkt aus der Thread-Ansicht und der Forumsübersicht
-// @version            1.8
+// @version            1.7
 // @author             pspzockerscene
 // @namespace          https://board.jdownloader.org/
 // @homepageURL        https://github.com/pspzockerscene/vBulletinJDownloaderForumHelper
@@ -360,16 +360,15 @@
 
     // Extrahiere das aktuell gesetzte Präfix und den Titel aus der Threadseite
     function getCurrentPrefixAndTitle() {
-        // Suche nach dem Thread-Titel in der navbar mit Präfix-Format
-        // Beispiel: <td class="navbar"...><strong>[<b><font...>Erledigt</font></b>] Titel</strong></td>
-        // oder auch einfach: <strong>[Erledigt] Titel</strong>
+        // Suche nach dem Thread-Titel in der navbar
+        // Mit Präfix: <td class="navbar"...><strong>[Präfix] Titel</strong></td>
+        // Ohne Präfix: <td class="navbar"...><strong> Titel</strong></td>
 
-        // Suche nach allen möglichen Formaten des Präfix in strong tags
-        // Pattern: [beliebiger HTML content mit Präfix-Text in Klammern]
-        const navbarMatch = document.body.innerHTML.match(/<td class="navbar"[^>]*>[\s\S]*?<strong>\s*\[\s*(?:<[^>]+>)*([^\]<]+)(?:<[^>]*>)*\s*\]\s+([^<]+)<\/strong>/);
+        // Versuche zuerst mit Präfix zu matchen
+        let navbarMatch = document.body.innerHTML.match(/<td class="navbar"[^>]*>[\s\S]*?<strong>\s*\[\s*(?:<[^>]+>)*([^\]<]+)(?:<[^>]*>)*\s*\]\s+([^<]+)<\/strong>/);
 
         if (navbarMatch && navbarMatch[1]) {
-            // navbarMatch[1] enthält den Präfix-Text (z.B. "Erledigt")
+            // Mit Präfix gefunden
             const prefixText = navbarMatch[1].trim();
             const prefixLabel = `[${prefixText}]`;
             const title = navbarMatch[2] ? navbarMatch[2].trim() : '';
@@ -385,7 +384,15 @@
             return { prefixId: '', title };
         }
 
-        // Wenn kein Präfix mit Brackets gefunden
+        // Kein Präfix gefunden - verwende präziseres Pattern für Titel ohne Präfix
+        navbarMatch = document.body.innerHTML.match(/navbits_finallink_ltr\.gif.*?<\/a>\s*<strong>([^<]+)<\/strong>/);
+
+        if (navbarMatch && navbarMatch[1]) {
+            const title = navbarMatch[1].trim();
+            return { prefixId: '', title };
+        }
+
+        // Nichts gefunden
         return { prefixId: '', title: '' };
     }
 
