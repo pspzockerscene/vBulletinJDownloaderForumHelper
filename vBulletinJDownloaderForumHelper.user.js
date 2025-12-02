@@ -5,7 +5,7 @@
 // @description        Setzt Thread-Präfixe mit einem Klick direkt aus der Thread-Ansicht und der Forumsübersicht
 // @description:en     Set thread prefixes with a single click from thread view and forum list
 // @description:de     Setzt Thread-Präfixe mit einem Klick direkt aus der Thread-Ansicht und der Forumsübersicht
-// @version            1.7
+// @version            1.9
 // @author             pspzockerscene
 // @namespace          https://board.jdownloader.org/
 // @homepageURL        https://github.com/pspzockerscene/vBulletinJDownloaderForumHelper
