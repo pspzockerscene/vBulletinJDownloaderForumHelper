@@ -395,7 +395,6 @@
             return { prefixId: '', title };
         }
 
-        // Nichts gefunden
         console.log('Kein Titel gefunden');
         return { prefixId: '', title: '' };
     }
