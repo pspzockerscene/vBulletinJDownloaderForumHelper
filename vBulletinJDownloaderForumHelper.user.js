@@ -5,7 +5,7 @@
 // @description        Setzt Thread-Präfixe mit einem Klick direkt aus der Thread-Ansicht und der Forumsübersicht
 // @description:en     Set thread prefixes with a single click from thread view and forum list
 // @description:de     Setzt Thread-Präfixe mit einem Klick direkt aus der Thread-Ansicht und der Forumsübersicht
-// @version            1.9
+// @version            1.8
 // @author             pspzockerscene
 // @namespace          https://board.jdownloader.org/
 // @homepageURL        https://github.com/pspzockerscene/vBulletinJDownloaderForumHelper
@@ -385,14 +385,18 @@
         }
 
         // Kein Präfix gefunden - verwende präziseres Pattern für Titel ohne Präfix
-        navbarMatch = document.body.innerHTML.match(/navbits_finallink_ltr\.gif.*?<\/a>\s*<strong>([^<]+)<\/strong>/);
+        navbarMatch = document.body.innerHTML.match(/navbits_finallink_ltr\.gif[^>]*\/><\/a>\s*<strong>([^<]+)<\/strong>/);
+
+        console.log('Fallback Pattern Match:', navbarMatch);
 
         if (navbarMatch && navbarMatch[1]) {
             const title = navbarMatch[1].trim();
+            console.log('Titel ohne Präfix erkannt:', title);
             return { prefixId: '', title };
         }
 
         // Nichts gefunden
+        console.log('Kein Titel gefunden');
         return { prefixId: '', title: '' };
     }
 
@@ -459,6 +463,17 @@
     // Listener auf Select-Change und Input-Change
     document.getElementById('prefix-selector').addEventListener('change', updateButtonStatus);
     document.getElementById('thread-title-input').addEventListener('input', updateButtonStatus);
+
+    // Enter-Taste im Titel-Feld soll den Button auslösen
+    document.getElementById('thread-title-input').addEventListener('keypress', function(event) {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            const button = document.getElementById('prefix-apply-btn');
+            if (button && !button.disabled) {
+                button.click();
+            }
+        }
+    });
 
     // Expand/Collapse Funktionalität
     const overlayDiv = document.getElementById('prefix-setter-overlay');
