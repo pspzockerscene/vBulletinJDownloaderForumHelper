@@ -5,7 +5,7 @@
 // @description        Setzt Thread-Präfixe mit einem Klick direkt aus der Thread-Ansicht und der Forumsübersicht
 // @description:en     Set thread prefixes with a single click from thread view and forum list
 // @description:de     Setzt Thread-Präfixe mit einem Klick direkt aus der Thread-Ansicht und der Forumsübersicht
-// @version            1.8
+// @version            1.9
 // @author             pspzockerscene
 // @namespace          https://board.jdownloader.org/
 // @homepageURL        https://github.com/pspzockerscene/vBulletinJDownloaderForumHelper
@@ -384,19 +384,12 @@
             return { prefixId: '', title };
         }
 
-        // Kein Präfix gefunden - verwende präziseres Pattern für Titel ohne Präfix
-        navbarMatch = document.body.innerHTML.match(/navbits_finallink_ltr\.gif[^>]*\/><\/a>\s*<strong>([^<]+)<\/strong>/);
+        // Titel aus title Tag
+        let currentTitle = document.title.trim();
+        // Entferne den Suffix "- JDownloader Community - Appwork GmbH"
+        currentTitle = currentTitle.replace(/\s*-\s*JDownloader Community\s*-\s*Appwork GmbH\s*$/, '').trim();
 
-        console.log('Fallback Pattern Match:', navbarMatch);
-
-        if (navbarMatch && navbarMatch[1]) {
-            const title = navbarMatch[1].trim();
-            console.log('Titel ohne Präfix erkannt:', title);
-            return { prefixId: '', title };
-        }
-
-        console.log('Kein Titel gefunden');
-        return { prefixId: '', title: '' };
+        return { prefixId: '', title: currentTitle };
     }
 
     const currentPrefixData = getCurrentPrefixAndTitle();
