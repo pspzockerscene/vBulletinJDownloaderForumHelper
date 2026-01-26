@@ -5,7 +5,7 @@
 // @description        Setzt Thread-Präfixe mit einem Klick direkt aus der Thread-Ansicht und der Forumsübersicht
 // @description:en     Set thread prefixes with a single click from thread view and forum list
 // @description:de     Setzt Thread-Präfixe mit einem Klick direkt aus der Thread-Ansicht und der Forumsübersicht
-// @version            1.9
+// @version            1.9.1
 // @author             pspzockerscene
 // @namespace          https://board.jdownloader.org/
 // @homepageURL        https://github.com/pspzockerscene/vBulletinJDownloaderForumHelper
@@ -360,35 +360,36 @@
 
     // Extrahiere das aktuell gesetzte Präfix und den Titel aus der Threadseite
     function getCurrentPrefixAndTitle() {
-        // Suche nach dem Thread-Titel in der navbar
-        // Mit Präfix: <td class="navbar"...><strong>[Präfix] Titel</strong></td>
-        // Ohne Präfix: <td class="navbar"...><strong> Titel</strong></td>
-
-        // Versuche zuerst mit Präfix zu matchen
-        let navbarMatch = document.body.innerHTML.match(/<td class="navbar"[^>]*>[\s\S]*?<strong>\s*\[\s*(?:<[^>]+>)*([^\]<]+)(?:<[^>]*>)*\s*\]\s+([^<]+)<\/strong>/);
-
-        if (navbarMatch && navbarMatch[1]) {
-            // Mit Präfix gefunden
-            const prefixText = navbarMatch[1].trim();
-            const prefixLabel = `[${prefixText}]`;
-            const title = navbarMatch[2] ? navbarMatch[2].trim() : '';
-
-            // Finde die ID für dieses Label in den aktuellen Präfixen
-            for (const [prefixId, label] of Object.entries(prefixes)) {
-                if (label === prefixLabel) {
-                    return { prefixId, title };
-                }
-            }
-
-            // Wenn Präfix gefunden aber nicht erkannt
-            return { prefixId: '', title };
-        }
-
-        // Titel aus title Tag
+        const bodyHTML = document.body.innerHTML;
+        
+        // Titel aus title Tag extrahieren
         let currentTitle = document.title.trim();
         // Entferne den Suffix "- JDownloader Community - Appwork GmbH"
         currentTitle = currentTitle.replace(/\s*-\s*JDownloader Community\s*-\s*Appwork GmbH\s*$/, '').trim();
 
+        // Durchlaufe alle bekannten Präfixe für das aktuelle Forum
+        for (const [prefixId, prefixLabel] of Object.entries(prefixes)) {
+            if (prefixId === '') continue; // Skip "(ohne Präfix)"
+            
+            // Extrahiere den Präfix-Text ohne Klammern: "[Script]" -> "Script"
+            const prefixText = prefixLabel.replace(/^\[/, '').replace(/\]$/, '');
+            
+            // Suche nach diesem Präfix im HTML (mit <font> Tags oder ohne)
+            const regexWithFont = new RegExp(`\\[<b><font[^>]*>${prefixText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}</font></b>\\]`);
+            const regexWithoutFont = new RegExp(`\\[<b>${prefixText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}</b>\\]`);
+            
+            if (regexWithFont.test(bodyHTML) || regexWithoutFont.test(bodyHTML)) {
+                // Präfix im HTML gefunden - prüfe ob er auch im Titel ist
+                if (currentTitle.startsWith(prefixLabel + ' ')) {
+                    // Präfix ist im Titel - entferne ihn
+                    const titleWithoutPrefix = currentTitle.substring((prefixLabel + ' ').length).trim();
+                    return { prefixId, title: titleWithoutPrefix };
+                }
+                // Präfix im HTML aber nicht im Titel - ignoriere ihn
+            }
+        }
+
+        // Kein Präfix gefunden oder nicht im Titel
         return { prefixId: '', title: currentTitle };
     }
 
@@ -403,7 +404,7 @@
         <label for="prefix-selector">Präfix:</label>
         <select id="prefix-selector">
             ${Object.entries(prefixes).map(([value, label]) =>
-                `<option value="${value}" ${value === 'bugreport_s' ? 'selected' : ''}>${label}</option>`
+                `<option value="${value}" ${value === defaultPrefix ? 'selected' : ''}>${label}</option>`
             ).join('')}
         </select>
         <label for="thread-title-input" style="margin-top: 5px;">Titel:</label>
