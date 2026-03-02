@@ -5,7 +5,7 @@
 // @description        Setzt Thread-Präfixe mit einem Klick direkt aus der Thread-Ansicht und der Forumsübersicht
 // @description:en     Set thread prefixes with a single click from thread view and forum list
 // @description:de     Setzt Thread-Präfixe mit einem Klick direkt aus der Thread-Ansicht und der Forumsübersicht
-// @version            1.9.1
+// @version            1.9.2
 // @author             pspzockerscene
 // @namespace          https://board.jdownloader.org/
 // @homepageURL        https://github.com/pspzockerscene/vBulletinJDownloaderForumHelper
@@ -13,6 +13,7 @@
 // @icon               https://board.jdownloader.org/favicon.ico
 // @match              https://board.jdownloader.org/showthread.php*
 // @match              https://board.jdownloader.org/forumdisplay.php*
+// @match              https://support.jdownloader.org/de/*
 // @run-at             document-end
 // @inject-into        content
 // @grant              GM_getValue
@@ -30,6 +31,13 @@
 
 (function() {
     'use strict';
+
+    // support.jdownloader.org: "/de/" aus der URL entfernen
+    if (location.hostname === 'support.jdownloader.org' && location.pathname.startsWith('/de/')) {
+        const newUrl = location.href.replace('support.jdownloader.org/de/', 'support.jdownloader.org/');
+        history.replaceState(null, '', newUrl);
+        return;
+    }
 
     // Zentrale Prüfung: User muss eingeloggt sein
     if (!document.body.innerHTML.includes('logouthash=')) {
@@ -361,7 +369,7 @@
     // Extrahiere das aktuell gesetzte Präfix und den Titel aus der Threadseite
     function getCurrentPrefixAndTitle() {
         const bodyHTML = document.body.innerHTML;
-        
+
         // Titel aus title Tag extrahieren
         let currentTitle = document.title.trim();
         // Entferne den Suffix "- JDownloader Community - Appwork GmbH"
@@ -370,14 +378,14 @@
         // Durchlaufe alle bekannten Präfixe für das aktuelle Forum
         for (const [prefixId, prefixLabel] of Object.entries(prefixes)) {
             if (prefixId === '') continue; // Skip "(ohne Präfix)"
-            
+
             // Extrahiere den Präfix-Text ohne Klammern: "[Script]" -> "Script"
             const prefixText = prefixLabel.replace(/^\[/, '').replace(/\]$/, '');
-            
+
             // Suche nach diesem Präfix im HTML (mit <font> Tags oder ohne)
             const regexWithFont = new RegExp(`\\[<b><font[^>]*>${prefixText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}</font></b>\\]`);
             const regexWithoutFont = new RegExp(`\\[<b>${prefixText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}</b>\\]`);
-            
+
             if (regexWithFont.test(bodyHTML) || regexWithoutFont.test(bodyHTML)) {
                 // Präfix im HTML gefunden - prüfe ob er auch im Titel ist
                 if (currentTitle.startsWith(prefixLabel + ' ')) {
@@ -717,4 +725,4 @@
         alert('Threadübersicht Präfixe ' + (!current ? 'aktiviert' : 'deaktiviert') + '\n(Seite neu laden zum Anwenden)');
     });
 
-})();
+})();y
