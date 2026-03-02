@@ -725,4 +725,4 @@
         alert('Threadübersicht Präfixe ' + (!current ? 'aktiviert' : 'deaktiviert') + '\n(Seite neu laden zum Anwenden)');
     });
 
-})();y
+})();
