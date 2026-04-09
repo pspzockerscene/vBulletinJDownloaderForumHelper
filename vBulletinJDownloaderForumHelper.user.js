@@ -5,7 +5,7 @@
 // @description        Setzt Thread-Präfixe mit einem Klick direkt aus der Thread-Ansicht und der Forumsübersicht
 // @description:en     Set thread prefixes with a single click from thread view and forum list
 // @description:de     Setzt Thread-Präfixe mit einem Klick direkt aus der Thread-Ansicht und der Forumsübersicht
-// @version            1.9.2
+// @version            1.9.3
 // @author             pspzockerscene
 // @namespace          https://board.jdownloader.org/
 // @homepageURL        https://github.com/pspzockerscene/vBulletinJDownloaderForumHelper
@@ -367,39 +367,46 @@
     document.head.appendChild(style);
 
     // Extrahiere das aktuell gesetzte Präfix und den Titel aus der Threadseite
-    function getCurrentPrefixAndTitle() {
-        const bodyHTML = document.body.innerHTML;
+function getCurrentPrefixAndTitle() {
+    const bodyHTML = document.body.innerHTML;
+    // Titel aus title Tag extrahieren
+    let currentTitle = document.title.trim();
 
-        // Titel aus title Tag extrahieren
-        let currentTitle = document.title.trim();
-        // Entferne den Suffix "- JDownloader Community - Appwork GmbH"
-        currentTitle = currentTitle.replace(/\s*-\s*JDownloader Community\s*-\s*Appwork GmbH\s*$/, '').trim();
-
-        // Durchlaufe alle bekannten Präfixe für das aktuelle Forum
-        for (const [prefixId, prefixLabel] of Object.entries(prefixes)) {
-            if (prefixId === '') continue; // Skip "(ohne Präfix)"
-
-            // Extrahiere den Präfix-Text ohne Klammern: "[Script]" -> "Script"
-            const prefixText = prefixLabel.replace(/^\[/, '').replace(/\]$/, '');
-
-            // Suche nach diesem Präfix im HTML (mit <font> Tags oder ohne)
-            const regexWithFont = new RegExp(`\\[<b><font[^>]*>${prefixText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}</font></b>\\]`);
-            const regexWithoutFont = new RegExp(`\\[<b>${prefixText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}</b>\\]`);
-
-            if (regexWithFont.test(bodyHTML) || regexWithoutFont.test(bodyHTML)) {
-                // Präfix im HTML gefunden - prüfe ob er auch im Titel ist
-                if (currentTitle.startsWith(prefixLabel + ' ')) {
-                    // Präfix ist im Titel - entferne ihn
-                    const titleWithoutPrefix = currentTitle.substring((prefixLabel + ' ').length).trim();
-                    return { prefixId, title: titleWithoutPrefix };
-                }
-                // Präfix im HTML aber nicht im Titel - ignoriere ihn
-            }
+    // Seite aus URL-Parameter "page" ermitteln und aus dem Titel entfernen
+    // Muss VOR dem Entfernen des Community-Suffixes passieren
+    const urlParams = new URLSearchParams(window.location.search);
+    const pageParam = urlParams.get('page');
+    if (pageParam) {
+        const pageNum = parseInt(pageParam, 10);
+        if (!isNaN(pageNum)) {
+            currentTitle = currentTitle.replace(new RegExp(`\\s*-\\s*Seite\\s+${pageNum}\\s*`), ' ').trim();
         }
-
-        // Kein Präfix gefunden oder nicht im Titel
-        return { prefixId: '', title: currentTitle };
     }
+
+    // Entferne den Suffix "- JDownloader Community - Appwork GmbH"
+    currentTitle = currentTitle.replace(/\s*-\s*JDownloader Community\s*-\s*Appwork GmbH\s*$/, '').trim();
+
+    // Durchlaufe alle bekannten Präfixe für das aktuelle Forum
+    for (const [prefixId, prefixLabel] of Object.entries(prefixes)) {
+        if (prefixId === '') continue; // Skip "(ohne Präfix)"
+        // Extrahiere den Präfix-Text ohne Klammern: "[Script]" -> "Script"
+        const prefixText = prefixLabel.replace(/^\[/, '').replace(/\]$/, '');
+        // Suche nach diesem Präfix im HTML (mit <font> Tags oder ohne)
+        const regexWithFont = new RegExp(`\\[<b><font[^>]*>${prefixText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}</font></b>\\]`);
+        const regexWithoutFont = new RegExp(`\\[<b>${prefixText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}</b>\\]`);
+        if (regexWithFont.test(bodyHTML) || regexWithoutFont.test(bodyHTML)) {
+            // Präfix im HTML gefunden - prüfe ob er auch im Titel ist
+            if (currentTitle.startsWith(prefixLabel + ' ')) {
+                // Präfix ist im Titel - entferne ihn
+                const titleWithoutPrefix = currentTitle.substring((prefixLabel + ' ').length).trim();
+                return { prefixId, title: titleWithoutPrefix };
+            }
+            // Präfix im HTML aber nicht im Titel - ignoriere ihn
+        }
+    }
+    // Kein Präfix gefunden oder nicht im Titel
+    return { prefixId: '', title: currentTitle };
+}
 
     const currentPrefixData = getCurrentPrefixAndTitle();
     const currentPrefixId = currentPrefixData.prefixId;
