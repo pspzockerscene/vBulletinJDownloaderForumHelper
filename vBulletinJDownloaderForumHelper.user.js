@@ -5,7 +5,7 @@
 // @description        Setzt Thread-Präfixe mit einem Klick direkt aus der Thread-Ansicht und der Forumsübersicht
 // @description:en     Set thread prefixes with a single click from thread view and forum list
 // @description:de     Setzt Thread-Präfixe mit einem Klick direkt aus der Thread-Ansicht und der Forumsübersicht
-// @version            1.9.4
+// @version            1.9.5
 // @author             pspzockerscene
 // @namespace          https://board.jdownloader.org/
 // @homepageURL        https://github.com/pspzockerscene/vBulletinJDownloaderForumHelper
@@ -13,7 +13,7 @@
 // @icon               https://board.jdownloader.org/favicon.ico
 // @match              https://board.jdownloader.org/showthread.php*
 // @match              https://board.jdownloader.org/forumdisplay.php*
-// @match              https://support.jdownloader.org/de/*
+// @match              https://support.jdownloader.org/*
 // @run-at             document-end
 // @inject-into        content
 // @grant              GM_getValue
@@ -32,12 +32,12 @@
 (function() {
     'use strict';
 
-    // support.jdownloader.org: "/de/" aus der URL entfernen
-    if (location.hostname === 'support.jdownloader.org' && location.pathname.startsWith('/de/')) {
-        const newUrl = location.href.replace('support.jdownloader.org/de/', 'support.jdownloader.org/');
-        history.replaceState(null, '', newUrl);
-        return;
-    }
+// support.jdownloader.org: Sprachpräfix aus der URL entfernen (z.B. /de/, /en/, /fr/, ...)
+if (location.hostname === 'support.jdownloader.org' && /^\/[a-z]{2}\//.test(location.pathname)) {
+    const newUrl = location.href.replace(/support\.jdownloader\.org\/[a-z]{2}\//, 'support.jdownloader.org/');
+    history.replaceState(null, '', newUrl);
+    return;
+}
 
     // Zentrale Prüfung: User muss eingeloggt sein
     if (!document.body.innerHTML.includes('logouthash=')) {
